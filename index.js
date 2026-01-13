@@ -6,14 +6,7 @@ const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
-app.use(cors());
-// Middleware para definir manualmente os headers de CORS
-app.use((req, res, next) => {
-	res.header('Access-Control-Allow-Origin', '*'); // ou coloque o domínio do app
-	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-	next();
-});
+
 app.use(express.json());
 
 // Mensagem ao acessar a raiz
@@ -23,6 +16,14 @@ app.get('/', (req, res) => {
 
 // Proxy genérico: repassa qualquer requisição para a API externa
 app.use('/proxy/*', async (req, res) => {
+	// Definindo headers CORS manualmente apenas para /proxy
+	res.header('Access-Control-Allow-Origin', '*');
+	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+	res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	// Responde a preflight OPTIONS
+	if (req.method === 'OPTIONS') {
+		return res.sendStatus(204);
+	}
 		const endpoint = req.params[0];
 	const url = `https://appdev.antena1.com.br/${endpoint}`;
 		const origin = req.headers.origin || 'Origem não informada';

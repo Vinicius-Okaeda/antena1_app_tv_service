@@ -19,11 +19,13 @@ app.use(express.json());
 
 // Mensagem ao acessar a raiz
 app.get('/api', (req, res) => {
+	console.log('Requisição recebida na raiz /api');
 	res.send('API rodando');
 });
 
 // Proxy genérico: repassa qualquer requisição para a API externa
 app.use('/aegis/*', async (req, res) => {
+	console.log('Entrou no proxy /aegis');
 	// Definindo headers CORS manualmente apenas para /proxy
 	res.header('Access-Control-Allow-Origin', '*');
 	res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -76,6 +78,7 @@ app.use('/aegis/*', async (req, res) => {
 
 // Proxy genérico: repassa qualquer requisição para a API externa
 app.use('/a1/*', async (req, res) => {
+	console.log('Entrou no proxy /a1');
 	// Definindo headers CORS manualmente apenas para /proxy
 	//res.header('Access-Control-Allow-Origin', '*');
 	//res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -127,6 +130,7 @@ app.use('/a1/*', async (req, res) => {
 });
 
 app.use('/api/testeCors', async (req, res) => {
+	console.log('Entrou na rota /api/testeCors');
 	try {
 		const response = await axios.get('https://antena1.com.br/api/v1/getTop10/1');
 		console.log('Resposta da API externa:', response.data);

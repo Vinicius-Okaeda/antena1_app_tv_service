@@ -2,7 +2,7 @@ const cors = require('cors');
 // Libera CORS para todas as rotas
 
 
-require('dotenv').config();
+//require('dotenv').config();
 
 const express = require('express');
 const axios = require('axios');
@@ -143,5 +143,8 @@ app.use('/api/testeCors', async (req, res) => {
 
 const PORT = process.env.PORT || 4002;
 app.listen(PORT, () => {
-	console.log(`Proxy rodando na porta ${PORT}`);
+	const now = new Date();
+	const dataHora = now.toLocaleString('pt-BR', { hour12: false });
+	const segundos = String(now.getSeconds()).padStart(2, '0');
+	console.log(`Proxy rodando na porta ${PORT} | ${dataHora}:${segundos}`);
 });

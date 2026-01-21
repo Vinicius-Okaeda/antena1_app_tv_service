@@ -18,7 +18,7 @@ app.use(cors({
 app.use(express.json());
 
 // Mensagem ao acessar a raiz
-app.get('/', (req, res) => {
+app.get('/api', (req, res) => {
 	res.send('API rodando');
 });
 
@@ -126,7 +126,7 @@ app.use('/a1/*', async (req, res) => {
 	}
 });
 
-app.use('/testeCors', async (req, res) => {
+app.use('/api/testeCors', async (req, res) => {
 	try {
 		const response = await axios.get('https://antena1.com.br/api/v1/getTop10/1');
 		console.log('Resposta da API externa:', response.data);

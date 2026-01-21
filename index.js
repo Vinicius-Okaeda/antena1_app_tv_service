@@ -141,7 +141,7 @@ app.use('/api/testeCors', async (req, res) => {
 	}
 })
 
-const PORT = process.env.PORT || 4002;
+const PORT = process.env.PORT || process.env.PORT_ALTERNATIVE;
 app.listen(PORT, () => {
 	const now = new Date();
 	const dataHora = now.toLocaleString('pt-BR', { hour12: false });

@@ -70,15 +70,15 @@ app.use('/a1/*', async (req, res) => {
 	}
 });
 
-// ─── Proxy /api/web/* → www.antena1.com.br (requer JWT) ──────────────────────
+// ─── Proxy /api/web/* → antena1.com.br (requer JWT) ─────────────────────────
 app.use('/api/web/*', requireAuth, async (req, res) => {
 	const endpoint = req.params[0];
-	const url = `https://www.antena1.com.br/api/v1/${endpoint}`;
+	const url = `https://antena1.com.br/api/v1/${endpoint}`;
 
 	const forwardHeaders = {
-		'host': 'www.antena1.com.br',
+		'host': 'antena1.com.br',
 		'user-agent': req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
-		'origin': 'https://www.antena1.com.br',
+		'origin': 'https://antena1.com.br',
 		'accept': req.headers['accept'] || 'application/json',
 		'accept-language': req.headers['accept-language'] || 'pt-BR,pt;q=0.9',
 	};

@@ -1,199 +1,130 @@
-const cors = require('cors');
-// Libera CORS para todas as rotas
-
-
-//require('dotenv').config();
+require('dotenv').config();
 
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 
 const app = express();
 
+// ─── Variáveis de ambiente ────────────────────────────────────────────────────
+const PORT = process.env.PORT || 4001;
+const SERVICE_TOKEN = process.env.SERVICE_TOKEN;
+const A1_AEGIS_KEY = process.env.A1_AEGIS_KEY;
+
+if (!SERVICE_TOKEN || !A1_AEGIS_KEY) {
+	console.error('[FATAL] Variáveis de ambiente obrigatórias não definidas. Verifique o .env');
+	process.exit(1);
+}
+
+// ─── Middlewares globais ──────────────────────────────────────────────────────
 app.use(cors({
 	origin: '*',
 	methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-	allowedHeaders: ['Content-Type', 'Authorization', 'devicetoken', 'appauth', 'access-control-allow-methods', 'Access-Control-Allow-Methods', 'deviceid', 'access-control-allow-origin', 'revenuecatuserid', 'access-control-allow-headers', 'a1-aegis-key', 'baseurl']
+	allowedHeaders: [
+		'Content-Type', 'Authorization', 'devicetoken', 'appauth',
+		'deviceid', 'revenuecatuserid', 'a1-aegis-key', 'baseurl'
+	]
 }));
 
 app.use(express.json());
 
-// Mensagem ao acessar a raiz
+// ─── Middleware de autenticação por token estático ────────────────────────────
+function requireAuth(req, res, next) {
+	const authHeader = req.headers['authorization'];
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		return res.status(401).json({ error: 'Token não informado.' });
+	}
+	const token = authHeader.split(' ')[1];
+	if (token !== SERVICE_TOKEN) {
+		return res.status(403).json({ error: 'Token inválido.' });
+	}
+	next();
+}
+
+// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api', (req, res) => {
-	console.log('Requisição recebida na raiz /api');
-	res.send('API rodando');
+	res.json({ status: 'ok' });
 });
 
-// Proxy genérico: repassa qualquer requisição para a API externa
-
-// Proxy genérico: repassa qualquer requisição para a API externa
+// ─── Proxy /a1/* → antena1.com.br (sem autenticação) ─────────────────────────
 app.use('/a1/*', async (req, res) => {
-	console.log('Entrou no proxy /a1');
-	// Definindo headers CORS manualmente apenas para /proxy
-	//res.header('Access-Control-Allow-Origin', '*');
-	//res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-	//res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, devicetoken, appauth, access-control-allow-methods, Access-Control-Allow-Methods, deviceid, access-control-allow-origin, revenuecatuserid, access-control-allow-headers, a1-aegis-key, baseurl');
-	// Responde a preflight OPTIONS
-	if (req.method === 'OPTIONS') {
-		return res.sendStatus(204);
-	}
+	if (req.method === 'OPTIONS') return res.sendStatus(204);
+
 	const endpoint = req.params[0];
 	const url = `https://antena1.com.br/api/v1/${endpoint}`;
-	const origin = req.headers.origin || 'Origem não informada';
-	console.log('Headers da requisição original:', req.headers);
-	console.log('[PROXY] Início da requisição');
-	console.log(`[PROXY] Requisição recebida: ${req.method} ${req.originalUrl} | Origin: ${origin}`);
+
 	try {
-		console.log('[PROXY] Fazendo requisição para API externa:', url);
-		const requestHeaders = { ...req.headers, host: 'antena1.com.br/api/v1' };
-		console.log('[PROXY] Headers enviados para API externa:', requestHeaders);
 		const response = await axios({
 			method: req.method,
 			url,
-			headers: requestHeaders,
+			headers: { ...req.headers, host: 'antena1.com.br' },
 			data: req.body,
 			params: req.query,
 			responseType: 'stream'
 		});
-		console.log('[PROXY] Resposta recebida da API externa, enviando para origem...');
 		res.set(response.headers);
-		// Reaplica os headers de CORS para garantir que não sejam sobrescritos
-	//res.header('Access-Control-Allow-Origin', '*');
-	//res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-		//res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, devicetoken, appauth, access-control-allow-methods, Access-Control-Allow-Methods, deviceid, access-control-allow-origin, revenuecatuserid, access-control-allow-headers, a1-aegis-key, baseurl');
 		response.data.pipe(res);
-		response.data.on('end', () => {
-			console.log(`[PROXY] Sucesso: resposta enviada para origem: ${origin} | Endpoint: ${url}`);
-		});
-		response.data.on('error', (err) => {
-			console.log('[PROXY] Erro ao enviar resposta para origem:', err);
-		});
 	} catch (error) {
-		console.log(`[PROXY] Erro na requisição para API externa no endpoint: ${url}`);
-		console.log('[PROXY] Mensagem do erro:', error.message);
-		res.status(error.response?.status || 500)
-		  .header('Access-Control-Allow-Origin', '*')
-		  .header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-		  .header('Access-Control-Allow-Headers', 'Content-Type, Authorization, devicetoken, appauth, access-control-allow-methods, Access-Control-Allow-Methods, deviceid, access-control-allow-origin, revenuecatuserid, access-control-allow-headers, a1-aegis-key, baseurl')
-		  .json({ error: error.message, endpoint: url });
+		console.error(`[/a1] Erro: ${url} | ${error.message}`);
+		res.status(error.response?.status || 500).json({ error: error.message });
 	}
 });
 
-app.use('/api/testeCors', async (req, res) => {
-	console.log('Entrou na rota /api/testeCors');
-	try {
-		const response = await axios.get('https://antena1.com.br/api/v1/getTop10/1');
-		console.log('Resposta da API externa:', response.data);
-		res.json(response.data);
-
-	} catch (error) {
-		console.log(error);
-	}
-})
-
-app.use('/api/web/*', async (req, res) => {
-	//console.log('Entrou na rota /api/testeCors');
+// ─── Proxy /api/web/* → www.antena1.com.br (requer JWT) ──────────────────────
+app.use('/api/web/*', requireAuth, async (req, res) => {
 	const endpoint = req.params[0];
-	//console.log('Endpoint solicitado:', endpoint);
 	const url = `https://www.antena1.com.br/api/v1/${endpoint}`;
+
+	const forwardHeaders = {
+		'host': 'www.antena1.com.br',
+		'user-agent': req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+		'origin': 'https://www.antena1.com.br',
+		'accept': req.headers['accept'] || 'application/json',
+		'accept-language': req.headers['accept-language'] || 'pt-BR,pt;q=0.9',
+	};
+	if (req.headers['cookie']) {
+		forwardHeaders['cookie'] = req.headers['cookie'];
+	}
+
 	try {
-		//console.log('[PROXY] Fazendo requisição para API externa:', url);
-		const requestHeaders = { ...req.headers, host: 'https://www.antena1.com.br/api/v1/' };
-		//console.log('[PROXY] Headers enviados para API externa:', requestHeaders);
 		const response = await axios({
 			method: req.method,
 			url,
-			//headers: requestHeaders,
+			headers: forwardHeaders,
 			data: req.body,
-			//params: req.query,
-			//responseType: 'stream'
+			params: req.query,
 		});
-		//console.log('Resposta da API externa:', response.data);
 		res.json(response.data);
-
-		//console.log('[PROXY] Resposta recebida da API externa, enviando para origem...');
-		//res.set(response.headers);
-		// Reaplica os headers de CORS para garantir que não sejam sobrescritos
-	//res.header('Access-Control-Allow-Origin', '*');
-	//res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-		//res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, devicetoken, appauth, access-control-allow-methods, Access-Control-Allow-Methods, deviceid, access-control-allow-origin, revenuecatuserid, access-control-allow-headers, a1-aegis-key, baseurl');
-		/*
-		response.data.pipe(res);
-		response.data.on('end', () => {
-			console.log(`[PROXY] Sucesso: resposta enviada para origem: ${origin} | Endpoint: ${url}`);
-		});
-		response.data.on('error', (err) => {
-			console.log('[PROXY] Erro ao enviar resposta para origem:', err);
-		});
-		
-		*/
 	} catch (error) {
-		console.log(`[PROXY] Erro na requisição para API externa no endpoint: ${url}`);
-		console.log('[PROXY] Mensagem do erro:', error.message);
-		res.status(error.response?.status || 500)
+		console.error(`[/api/web] Erro: ${url} | ${error.message}`);
+		res.status(error.response?.status || 500).json({ error: error.message });
 	}
-})
+});
 
-app.use('/api/tv/*', async (req, res) => {
-	console.log('Entrou na rota /api/testeCors');
-	console.log("o method é", req.method);
+// ─── Proxy /api/tv/* → aegis.antena1.com.br (requer JWT) ─────────────────────
+app.use('/api/tv/*', requireAuth, async (req, res) => {
 	const endpoint = req.params[0];
-	console.log('Endpoint solicitado:', endpoint);
 	const url = `http://aegis.antena1.com.br/api/v1/${endpoint}`;
+
 	try {
-		console.log('[PROXY] Fazendo requisição para API externa:', url);
-		console.log("No meu body tem", req.body);
-		console.log('Headers da requisição original:', req.headers);
-		const requestHeaders = { ...req.headers, host: 'http://aegis.antena1.com.br/api/v1/' };
-		console.log('[PROXY] Headers enviados para API externa:', requestHeaders);
-		
-		const response = await axios(url, {
+		const response = await axios({
 			method: req.method,
+			url,
 			headers: {
-				baseUrl: 'http://aegis.antena1.com.br/api/v1/',
-				'A1-Aegis-Key': 'Y2uJz9Vp7WsR5MxGyHtK4NqXeF6cA1LbD3sP8rUvOwZaE0TfBhQlIjCnVmOkRd',
+				'baseUrl': 'http://aegis.antena1.com.br/api/v1/',
+				'A1-Aegis-Key': A1_AEGIS_KEY,
 			},
 			data: req.body,
 		});
-		/*
-		const response = await axios({
-			method: req.method,
-			url,
-			headers: requestHeaders,
-			data: req.body,
-			params: req.query,
-			responseType: 'stream'
-		});
-		*/
-		console.log('Resposta da API externa:', response.data);
 		res.json(response.data);
-
-		console.log('[PROXY] Resposta recebida da API externa, enviando para origem...');
-		//res.set(response.headers);
-		// Reaplica os headers de CORS para garantir que não sejam sobrescritos
-	//res.header('Access-Control-Allow-Origin', '*');
-	//res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-		//res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, devicetoken, appauth, access-control-allow-methods, Access-Control-Allow-Methods, deviceid, access-control-allow-origin, revenuecatuserid, access-control-allow-headers, a1-aegis-key, baseurl');
-		/*
-		response.data.pipe(res);
-		response.data.on('end', () => {
-			console.log(`[PROXY] Sucesso: resposta enviada para origem: ${origin} | Endpoint: ${url}`);
-		});
-		response.data.on('error', (err) => {
-			console.log('[PROXY] Erro ao enviar resposta para origem:', err);
-		});
-		
-		*/
 	} catch (error) {
-		console.log(`[PROXY] Erro na requisição para API externa no endpoint: ${url}`);
-		console.log('[PROXY] Mensagem do erro:', error.message);
-		res.status(error.response?.status || 500)
+		console.error(`[/api/tv] Erro: ${url} | ${error.message}`);
+		res.status(error.response?.status || 500).json({ error: error.message });
 	}
-})
+});
 
-const PORT = 4001|| process.env.PORT_ALTERNATIVE;
+// ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-	const now = new Date();
-	const dataHora = now.toLocaleString('pt-BR', { hour12: false });
-	const segundos = String(now.getSeconds()).padStart(2, '0');
-	console.log(`Proxy rodando na porta ${PORT} | ${dataHora}:${segundos}`);
+	const now = new Date().toLocaleString('pt-BR', { hour12: false });
+	console.log(`Proxy rodando na porta ${PORT} | ${now}`);
 });

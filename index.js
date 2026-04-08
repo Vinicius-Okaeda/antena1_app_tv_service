@@ -3,6 +3,10 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const https = require('https');
+
+// Força IPv4 para evitar bloqueio do Sucuri via IPv6
+const httpsAgentIPv4 = new https.Agent({ family: 4 });
 
 const app = express();
 
@@ -70,15 +74,15 @@ app.use('/a1/*', async (req, res) => {
 	}
 });
 
-// ─── Proxy /api/web/* → antena1.com.br (requer JWT) ─────────────────────────
+// ─── Proxy /api/web/* → www.antena1.com.br (requer JWT) ─────────────────────
 app.use('/api/web/*', requireAuth, async (req, res) => {
 	const endpoint = req.params[0];
-	const url = `https://antena1.com.br/api/v1/${endpoint}`;
+	const url = `https://www.antena1.com.br/api/v1/${endpoint}`;
 
 	const forwardHeaders = {
-		'host': 'antena1.com.br',
+		'host': 'www.antena1.com.br',
 		'user-agent': req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
-		'origin': 'https://antena1.com.br',
+		'origin': 'https://www.antena1.com.br',
 		'accept': req.headers['accept'] || 'application/json',
 		'accept-language': req.headers['accept-language'] || 'pt-BR,pt;q=0.9',
 	};
@@ -91,6 +95,7 @@ app.use('/api/web/*', requireAuth, async (req, res) => {
 			method: req.method,
 			url,
 			headers: forwardHeaders,
+			httpsAgent: httpsAgentIPv4,
 			data: req.body,
 			params: req.query,
 		});

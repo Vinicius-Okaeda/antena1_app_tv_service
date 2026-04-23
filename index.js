@@ -16,7 +16,7 @@ const SERVICE_TOKEN = process.env.SERVICE_TOKEN;
 const A1_AEGIS_KEY = process.env.A1_AEGIS_KEY;
 
 if (!SERVICE_TOKEN || !A1_AEGIS_KEY) {
-	console.error('[FATAL] Variáveis de ambiente obrigatórias não definidas. Verifique o .env');
+	console.error('[FATAL] Variáveis de ambiente obrigatórias não definidas.');
 	process.exit(1);
 }
 
@@ -106,6 +106,25 @@ app.use('/api/web/*', requireAuth, async (req, res) => {
 	}
 });
 
+// ─── Proxy /api/fm/* → antenna1.fm (requer JWT) ──────────────────────────────
+app.use('/api/fm/*', requireAuth, async (req, res) => {
+	const endpoint = req.params[0];
+	const url = `https://antenna1.fm/api/v1/${endpoint}`;
+
+	try {
+		const response = await axios({
+			method: req.method,
+			url,
+			data: req.body,
+			params: req.query,
+		});
+		res.json(response.data);
+	} catch (error) {
+		console.error(`[/api/fm] Erro: ${url} | ${error.message}`);
+		res.status(error.response?.status || 500).json({ error: error.message });
+	}
+});
+
 // ─── Proxy /api/tv/* → aegis.antena1.com.br (requer JWT) ─────────────────────
 app.use('/api/tv/*', requireAuth, async (req, res) => {
 	const endpoint = req.params[0];
@@ -121,7 +140,27 @@ app.use('/api/tv/*', requireAuth, async (req, res) => {
 			},
 			data: req.body,
 		});
-		res.json(response.data);
+
+		let responseData = response.data;
+
+		if (endpoint.startsWith('app/streams/') && Array.isArray(responseData)) {
+			const PROXY_BASE = process.env.PROXY_BASE_URL || `http://localhost:${PORT}`;
+			const urlMappings = [
+				{ upstream: 'https://www.antena1.com.br/api/v1/', proxyPath: `${PROXY_BASE}/api/web/` },
+				{ upstream: 'https://antenna1.fm/api/v1/', proxyPath: `${PROXY_BASE}/api/fm/` },
+			];
+			responseData = responseData.map(stream => {
+				let meta = stream.meta;
+				let history = stream.history;
+				for (const { upstream, proxyPath } of urlMappings) {
+					if (meta) meta = meta.replace(upstream, proxyPath);
+					if (history) history = history.replace(upstream, proxyPath);
+				}
+				return { ...stream, meta, history };
+			});
+		}
+
+		res.json(responseData);
 	} catch (error) {
 		console.error(`[/api/tv] Erro: ${url} | ${error.message}`);
 		res.status(error.response?.status || 500).json({ error: error.message });
